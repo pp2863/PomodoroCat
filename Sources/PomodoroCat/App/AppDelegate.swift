@@ -5,6 +5,8 @@ import UserNotifications
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var panel: FloatingPanel!
     private var settingsWindowController: SettingsWindowController!
+    private var statusItem: NSStatusItem!
+    private var toggleVisibilityMenuItem: NSMenuItem!
     let timerEngine = TimerEngine(config: SettingsStore.shared.config)
 
     private let panelSize = NSSize(width: CatView.frameSize, height: CatView.frameSize)
@@ -41,6 +43,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for window in NSApp.windows where window !== panel {
             window.orderOut(nil)
         }
+
+        setUpStatusItem()
+    }
+
+    // Tiny menu-bar affordance so the cat can be hidden (e.g. before a screen
+    // share) and brought back — the floating panel itself offers no way to
+    // do that once it's off-screen.
+    private func setUpStatusItem() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem.button?.title = "🐱"
+
+        let menu = NSMenu()
+        toggleVisibilityMenuItem = NSMenuItem(
+            title: "Hide Cat",
+            action: #selector(toggleCatVisibility),
+            keyEquivalent: "h"
+        )
+        toggleVisibilityMenuItem.target = self
+        menu.addItem(toggleVisibilityMenuItem)
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit PomodoroCat", action: #selector(quit), keyEquivalent: "q"))
+        menu.items.last?.target = self
+        statusItem.menu = menu
+    }
+
+    @objc private func toggleCatVisibility() {
+        if panel.isVisible {
+            panel.orderOut(nil)
+            toggleVisibilityMenuItem.title = "Show Cat"
+        } else {
+            panel.orderFrontRegardless()
+            toggleVisibilityMenuItem.title = "Hide Cat"
+        }
+    }
+
+    @objc private func quit() {
+        NSApp.terminate(nil)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

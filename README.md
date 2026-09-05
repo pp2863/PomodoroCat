@@ -18,7 +18,7 @@ First launch: since the app is ad-hoc signed (not notarized), macOS will block a
 - Right-click `PomodoroCat.app` → Open → Open, or
 - System Settings → Privacy & Security → scroll down → "Open Anyway"
 
-After the first approval it launches normally. There's no Dock icon or menu bar — the floating cat *is* the app.
+After the first approval it launches normally. There's no Dock icon — the floating cat is the main UI, plus a small 🐱 menu bar icon for hiding it and quitting.
 
 ## Using it
 
@@ -27,6 +27,7 @@ After the first approval it launches normally. There's no Dock icon or menu bar 
 - **Drag** the cat anywhere on screen; its position is remembered across relaunches.
 - A ring appears around the cat while focusing, showing time remaining.
 - The cat's ears/tail/mood change between focusing, break, and idle, with a little celebration bounce when a session finishes.
+- **Click the 🐱 icon in the menu bar** to hide the cat (e.g. before screen sharing) or show it again, and to quit the app entirely. The timer keeps running in the background while hidden.
 
 ## Discord logging
 

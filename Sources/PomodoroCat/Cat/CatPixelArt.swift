@@ -98,6 +98,20 @@ enum CatPixelArt {
         grid[9][noseColumn] = .pink
         grid[9][width - 1 - noseColumn] = .pink
 
+        // Small pointed ears, stamped into the corners left clear by the
+        // rounded top of the head (rows 0-2) so the silhouette doesn't read
+        // as an earless/folded-ear dome.
+        grid[0][2] = .outline
+        grid[0][3] = .gray
+        grid[0][12] = .gray
+        grid[0][13] = .outline
+        grid[1][1] = .outline
+        grid[1][2] = .gray
+        grid[1][13] = .gray
+        grid[1][14] = .outline
+        grid[2][0] = .outline
+        grid[2][15] = .outline
+
         return grid
     }
 

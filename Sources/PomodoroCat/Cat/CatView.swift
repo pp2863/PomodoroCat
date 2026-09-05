@@ -79,6 +79,7 @@ struct CatView: View {
             .scaleEffect(breathingScale * celebrateBounce)
 
             timerLabel
+                .offset(y: 40)
         }
         .frame(width: Self.frameSize, height: Self.frameSize)
         .overlay(alignment: .topTrailing) { gearIcon }
