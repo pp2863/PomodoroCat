@@ -21,14 +21,20 @@ final class FloatingPanel: NSPanel {
         self.contentView = content
     }
 
-    override var canBecomeKey: Bool { false }
+    /// Normally false so the panel never steals focus. Flipped on only while the
+    /// user is deliberately typing the session's task, since keyboard input
+    /// requires key status, then flipped straight back.
+    var allowsKeyFocus = false
+
+    override var canBecomeKey: Bool { allowsKeyFocus }
     override var canBecomeMain: Bool { false }
 }
 
-/// Handles all mouse interaction for the panel: left-click toggles the timer,
-/// left-click-drag repositions the window, right-click (or clicking the gear
-/// corner) opens Settings. Kept in AppKit rather than SwiftUI gestures so drag
-/// and click-vs-drag disambiguation is fully reliable on a borderless panel.
+/// Handles all mouse interaction for the panel: double-click toggles the
+/// timer, left-click-drag repositions the window, right-click (or clicking
+/// the gear corner) opens Settings. Kept in AppKit rather than SwiftUI
+/// gestures so drag and click-vs-drag disambiguation is fully reliable on a
+/// borderless panel.
 final class PanelContentView: NSView {
     var onToggle: (() -> Void)?
     var onOpenSettings: (() -> Void)?
@@ -60,7 +66,10 @@ final class PanelContentView: NSView {
         let gearFrame = CGRect(x: bounds.maxX - 48, y: bounds.maxY - 48, width: 48, height: 48)
         if gearFrame.contains(point) {
             onOpenSettings?()
-        } else {
+        } else if event.clickCount == 2 {
+            // Double-click (rather than single-click) to start/pause, so an
+            // accidental stationary click while grabbing the cat to drag it
+            // doesn't toggle the timer.
             onToggle?()
         }
     }

@@ -1,6 +1,6 @@
 # PomodoroCat
 
-A tiny, cute, always-on-top cat that lives on your desktop and runs Pomodoro focus sessions. Click it to start/pause, right-click (or the gear icon) for settings. Finished focus sessions post to a Discord channel of your choice and are saved locally.
+A tiny, cute, always-on-top cat that lives on your desktop and runs Pomodoro focus sessions. Click it to start/pause, right-click (or the gear icon) for settings. Finished focus sessions are logged to a note in your Obsidian vault and saved locally.
 
 ## Requirements
 
@@ -22,21 +22,30 @@ After the first approval it launches normally. There's no Dock icon — the floa
 
 ## Using it
 
-- **Left-click** the cat: start / pause the current session.
+- **Double-click** the cat: start / pause the current session. (Single-click does nothing, so nudging the cat while dragging it won't accidentally pause it.)
+- **Click the "(task)" text** under the countdown while the timer is idle and type what the session is for. Press Return (or click away) to save it. It's only shown while idle — starting a session hides it and restores the full-size countdown — and it clears itself after each completed focus session so you describe the next one fresh.
 - **Right-click the cat, or click the small gear icon** in its corner: open Settings.
 - **Drag** the cat anywhere on screen; its position is remembered across relaunches.
 - A ring appears around the cat while focusing, showing time remaining.
 - The cat's ears/tail/mood change between focusing, break, and idle, with a little celebration bounce when a session finishes.
 - **Click the 🐱 icon in the menu bar** to hide the cat (e.g. before screen sharing) or show it again, and to quit the app entirely. The timer keeps running in the background while hidden.
 
-## Discord logging
+## Obsidian logging
 
-1. In Discord: **Server Settings → Integrations → Webhooks → New Webhook**. Pick the channel you want your focus log posted to, and copy the Webhook URL.
-2. Open PomodoroCat's Settings (right-click the cat) and paste the URL into "Webhook URL."
-3. Click "Test Webhook" to confirm it works.
-4. From then on, every completed **focus** session (not breaks) posts a message there.
+Every completed **focus** session (not breaks) is appended to a note in your vault as a line under that day's heading:
 
-If a post fails (e.g. no internet), the app retries once, then gives up silently — it never blocks or crashes the UI. The session is still recorded locally either way.
+```markdown
+## 09/06/2026
+
+- 14:32 — 25 min — Write Q3 report
+- 15:05 — 25 min — Review PR #142
+```
+
+The day heading (`mm/dd/yyyy`) is created automatically when the day's first session lands. Sessions with no task typed just log the time and duration.
+
+The note defaults to `PomodoroLog.md` in the vault Obsidian last had open, detected from Obsidian's own config. Change it in Settings — type a path or use "Choose…". If the note doesn't exist yet it's created; the day heading and time come from when the session *started*, so a session running past midnight files under the day it began.
+
+Obsidian picks up the change on its own — nothing needs to be running, and a failed write never interrupts the timer. The session is still recorded locally either way.
 
 ## Local history
 
@@ -46,12 +55,13 @@ Every completed session (focus and breaks) is appended to:
 ~/Library/Application Support/PomodoroCat/history.json
 ```
 
-as one JSON object per line (JSONL), including whether it was successfully posted to Discord.
+as one JSON object per line (JSONL), including the session's task (if any) and whether it was successfully written to the Obsidian note.
 
 ## Settings
 
-- Duration presets (Classic 25/5, Long 50/10) or fully custom minutes for focus / short break / long break, plus how many focus sessions happen before a long break.
+- Duration presets — **Classic** (25 min focus / 1 min break), **Medium** (50 / 5), **Long** (90 / 10) — or fully custom minutes for focus and break. Focus and break sessions simply alternate; there are no long breaks.
 - Changes apply starting with the *next* session — an in-progress countdown is never interrupted.
+- The Obsidian note to log sessions to.
 - "Launch at login" toggle.
 - "Reset Timer" returns to idle immediately.
 
@@ -59,7 +69,7 @@ as one JSON object per line (JSONL), including whether it was successfully poste
 
 ```
 make debug   # runs the raw debug binary directly (no bundle) — fastest inner loop,
-             # but notifications/Keychain need the packaged .app to work correctly
+             # but notifications need the packaged .app to work correctly
 make clean   # removes build artifacts and the .app bundle
 ```
 
@@ -70,8 +80,8 @@ Sources/PomodoroCat/
   App/            entry point, app delegate, floating panel + click handling
   Timer/          timer state machine and session configuration
   Cat/            the procedurally-drawn cat view and its moods
-  Settings/       settings window/view, UserDefaults + Keychain storage
+  Settings/       settings window/view, UserDefaults storage
   Notifications/  local notification handling
-  Discord/        webhook POST logic
+  Obsidian/       appending sessions to the vault note
   History/        local JSONL session history
 ```

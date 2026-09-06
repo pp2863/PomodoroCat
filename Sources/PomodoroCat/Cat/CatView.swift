@@ -1,20 +1,28 @@
 import SwiftUI
 
-/// Pixel-art cat rendered from CatPixelArt's grid data. Purely decorative: all
-/// hit-testing for the panel is handled by PanelContentView (AppKit) sitting
-/// behind this.
+/// Pixel-art cat rendered from CatPixelArt's grid data. The art itself is purely
+/// decorative — hit-testing for it is handled by PanelContentView (AppKit)
+/// sitting behind this — with the one exception of the task text, which has to
+/// take clicks itself so it can be typed into.
 struct CatView: View {
     @ObservedObject var engine: TimerEngine
+    /// Called when the user clicks the task text: the panel has to be allowed to
+    /// take key focus before a text field on it can accept typing.
+    var onBeginEditingTask: () -> Void = {}
+    var onEndEditingTask: () -> Void = {}
 
     static let frameSize: CGFloat = 240
     private let cellSize: CGFloat = 8
     private let ringDiameter: CGFloat = 210
+    private let taskCharacterLimit = 60
 
     @State private var isBlinking = false
     @State private var breathingScale: CGFloat = 1.0
     @State private var tailAngle: Double = -8
     @State private var celebrateBounce: CGFloat = 1.0
     @State private var blinkTimer: Timer?
+    @State private var isEditingTask = false
+    @FocusState private var isTaskFocused: Bool
 
     private var mood: CatMood {
         if engine.didJustComplete { return .celebrating }
@@ -30,8 +38,7 @@ struct CatView: View {
         case .running(let type), .paused(let type):
             switch type {
             case .focus: return engine.config.focusMinutes * 60
-            case .shortBreak: return engine.config.shortBreakMinutes * 60
-            case .longBreak: return engine.config.longBreakMinutes * 60
+            case .shortBreak, .longBreak: return engine.config.shortBreakMinutes * 60
             }
         case .idle:
             return max(engine.config.focusMinutes * 60, 1)
@@ -41,6 +48,8 @@ struct CatView: View {
     private var progress: Double {
         1 - Double(engine.remainingSeconds) / Double(totalSeconds)
     }
+
+    private var isIdle: Bool { engine.phase == .idle }
 
     private var label: String {
         let m = engine.remainingSeconds / 60
@@ -62,30 +71,43 @@ struct CatView: View {
 
     var body: some View {
         ZStack {
-            if mood == .focusing {
-                Circle()
-                    .trim(from: 0, to: max(0.001, progress))
-                    .stroke(Color.orange.opacity(0.85), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: ringDiameter, height: ringDiameter)
-            }
-
             ZStack {
-                pixelGrid(currentGrid, cellSize: cellSize)
-                pixelGrid(CatPixelArt.tailGrid(), cellSize: cellSize)
-                    .rotationEffect(.degrees(tailAngle), anchor: .topLeading)
-                    .offset(x: 58, y: 6)
-            }
-            .scaleEffect(breathingScale * celebrateBounce)
+                if mood == .focusing {
+                    Circle()
+                        .trim(from: 0, to: max(0.001, progress))
+                        .stroke(Color.orange.opacity(0.85), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: ringDiameter, height: ringDiameter)
+                }
 
-            timerLabel
-                .offset(y: 40)
+                ZStack {
+                    pixelGrid(currentGrid, cellSize: cellSize)
+                    pixelGrid(CatPixelArt.tailGrid(), cellSize: cellSize)
+                        .rotationEffect(.degrees(tailAngle), anchor: .topLeading)
+                        .offset(x: 58, y: 6)
+                }
+                .scaleEffect(breathingScale * celebrateBounce)
+
+                timerLabel
+                    .offset(y: isIdle ? 30 : 40)
+            }
+            .frame(width: Self.frameSize, height: Self.frameSize)
+            .overlay(alignment: .topTrailing) { gearIcon }
+            .allowsHitTesting(false)
+
+            if isIdle {
+                taskText
+                    .offset(y: 60)
+            }
         }
         .frame(width: Self.frameSize, height: Self.frameSize)
-        .overlay(alignment: .topTrailing) { gearIcon }
-        .allowsHitTesting(false)
         .onAppear { startAnimations() }
         .onChange(of: mood) { _ in reactToMoodChange() }
+        .onChange(of: isIdle) { idle in
+            // Starting a session hides the field; make sure focus goes back to
+            // whatever the user was working in.
+            if !idle { finishEditingTask() }
+        }
         .onDisappear { blinkTimer?.invalidate() }
     }
 
@@ -111,9 +133,42 @@ struct CatView: View {
         .frame(width: CGFloat(cols) * cellSize, height: CGFloat(rows) * cellSize)
     }
 
+    /// Shown only while idle: the countdown shrinks a little to make room, and
+    /// the text sits bare on the cat's belly rather than in a capsule.
+    private var taskText: some View {
+        Group {
+            if isEditingTask {
+                TextField("(task)", text: $engine.taskDescription)
+                    .textFieldStyle(.plain)
+                    .focused($isTaskFocused)
+                    .onSubmit { finishEditingTask() }
+                    .onExitCommand { finishEditingTask() }
+                    .onChange(of: engine.taskDescription) { newValue in
+                        if newValue.count > taskCharacterLimit {
+                            engine.taskDescription = String(newValue.prefix(taskCharacterLimit))
+                        }
+                    }
+                    .onChange(of: isTaskFocused) { focused in
+                        if !focused { finishEditingTask() }
+                    }
+            } else {
+                Text(engine.taskDescription.isEmpty ? "(task)" : engine.taskDescription)
+                    .opacity(engine.taskDescription.isEmpty ? 0.5 : 1)
+                    .onTapGesture { beginEditingTask() }
+            }
+        }
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
+        .multilineTextAlignment(.center)
+        .foregroundColor(PixelColor.outline.color)
+        .lineLimit(1)
+        .frame(width: 140)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
+    }
+
     private var timerLabel: some View {
         Text(label)
-            .font(.system(size: 26, weight: .heavy, design: .rounded))
+            .font(.system(size: isIdle ? 20 : 26, weight: .heavy, design: .rounded))
             .monospacedDigit()
             .foregroundColor(.white)
             .padding(.horizontal, 14)
@@ -130,8 +185,27 @@ struct CatView: View {
     private var gearIcon: some View {
         Image(systemName: "gearshape.fill")
             .font(.system(size: 19))
-            .foregroundColor(.secondary.opacity(0.6))
+            // The cat's own grey rather than a theme colour, so it stays visible
+            // whatever the panel is floating over; the shadow keeps it legible
+            // against light backgrounds too.
+            .foregroundColor(PixelColor.gray.color)
+            .shadow(color: .black.opacity(0.35), radius: 1.5, y: 0.5)
             .padding(13)
+    }
+
+    private func beginEditingTask() {
+        onBeginEditingTask()
+        isEditingTask = true
+        // Focus has to wait until the field actually exists in the hierarchy.
+        DispatchQueue.main.async { isTaskFocused = true }
+    }
+
+    private func finishEditingTask() {
+        guard isEditingTask else { return }
+        isTaskFocused = false
+        isEditingTask = false
+        engine.taskDescription = engine.taskDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        onEndEditingTask()
     }
 
     private func startAnimations() {

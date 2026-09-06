@@ -26,7 +26,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let contentView = PanelContentView(frame: NSRect(origin: .zero, size: panelSize))
-        let hosting = NSHostingView(rootView: CatView(engine: timerEngine))
+        let hosting = NSHostingView(
+            rootView: CatView(
+                engine: timerEngine,
+                onBeginEditingTask: { [weak self] in self?.beginTaskEditing() },
+                onEndEditingTask: { [weak self] in self?.endTaskEditing() }
+            )
+        )
         hosting.frame = contentView.bounds
         hosting.autoresizingMask = [.width, .height]
         contentView.addSubview(hosting)
@@ -82,6 +88,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.terminate(nil)
     }
 
+    /// Typing needs key focus, which the panel refuses by default. Grant it (and
+    /// activate, since a non-activating panel won't otherwise receive keys) only
+    /// for as long as the user is actually editing.
+    private func beginTaskEditing() {
+        panel.allowsKeyFocus = true
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+    }
+
+    private func endTaskEditing() {
+        panel.allowsKeyFocus = false
+        if NSApp.isActive {
+            NSApp.deactivate()
+        }
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         if let panel = panel {
             saveOrigin(panel.frame.origin)
@@ -109,19 +131,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleSessionCompleted(_ record: SessionRecord) {
         NotificationManager.shared.notifySessionCompleted(type: record.type)
-        HistoryStore.shared.append(record)
 
-        guard record.type == .focus else { return }
-        let webhookString = SettingsStore.shared.webhookURLString
-        guard !webhookString.isEmpty, let url = URL(string: webhookString) else { return }
-
-        DiscordLogger.shared.postFocusComplete(
-            minutes: record.durationMinutes,
-            completedAt: record.completedAt,
-            webhookURL: url
-        ) { success in
-            HistoryStore.shared.updateDiscordStatus(id: record.id, posted: success)
+        // Only focus sessions are worth logging to the vault; breaks still go
+        // into local history.
+        var record = record
+        if record.type == .focus {
+            record.obsidianLogged = ObsidianLogger.shared.append(
+                record,
+                logPath: SettingsStore.shared.obsidianLogPath
+            )
         }
+        HistoryStore.shared.append(record)
     }
 }
 

@@ -3,8 +3,10 @@ import Foundation
 final class TimerEngine: ObservableObject {
     @Published private(set) var phase: TimerPhase = .idle
     @Published private(set) var remainingSeconds: Int
-    @Published private(set) var completedFocusSessions: Int = 0
     @Published private(set) var didJustComplete: Bool = false
+    /// Free-text purpose for the upcoming focus session, typed on the cat while
+    /// idle. Cleared once a focus session completes so each one is described fresh.
+    @Published var taskDescription: String = ""
 
     private(set) var config: SessionConfig
     private var pendingConfig: SessionConfig?
@@ -43,7 +45,6 @@ final class TimerEngine: ObservableObject {
     func stop() {
         stopTicking()
         phase = .idle
-        completedFocusSessions = 0
         currentSessionStart = nil
         if let pending = pendingConfig {
             config = pending
@@ -89,11 +90,15 @@ final class TimerEngine: ObservableObject {
         }
     }
 
+    private var trimmedTask: String? {
+        let trimmed = taskDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
     private func duration(for type: SessionType) -> Int {
         switch type {
         case .focus: return config.focusMinutes
-        case .shortBreak: return config.shortBreakMinutes
-        case .longBreak: return config.longBreakMinutes
+        case .shortBreak, .longBreak: return config.shortBreakMinutes
         }
     }
 
@@ -107,11 +112,12 @@ final class TimerEngine: ObservableObject {
             startedAt: sessionStart,
             completedAt: Date(),
             durationMinutes: duration(for: type),
-            discordPosted: nil
+            task: trimmedTask,
+            obsidianLogged: nil
         )
 
         if type == .focus {
-            completedFocusSessions += 1
+            taskDescription = ""
         }
 
         if let pending = pendingConfig {
@@ -129,13 +135,8 @@ final class TimerEngine: ObservableObject {
 
     private func nextSessionType(after type: SessionType) -> SessionType {
         switch type {
-        case .focus:
-            return completedFocusSessions >= config.sessionsUntilLongBreak ? .longBreak : .shortBreak
-        case .shortBreak:
-            return .focus
-        case .longBreak:
-            completedFocusSessions = 0
-            return .focus
+        case .focus: return .shortBreak
+        case .shortBreak, .longBreak: return .focus
         }
     }
 

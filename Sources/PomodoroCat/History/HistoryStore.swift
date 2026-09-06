@@ -40,22 +40,6 @@ final class HistoryStore {
         }
     }
 
-    /// Discord posting happens asynchronously after the record is already written,
-    /// so once the result is known we patch that one record's flag in place.
-    func updateDiscordStatus(id: UUID, posted: Bool) {
-        queue.async { [self] in
-            var records = loadAllUnsynchronized()
-            guard let index = records.firstIndex(where: { $0.id == id }) else { return }
-            records[index].discordPosted = posted
-            let lines = records.compactMap { record -> String? in
-                guard let data = try? encoder.encode(record) else { return nil }
-                return String(data: data, encoding: .utf8)
-            }
-            let content = lines.joined(separator: "\n") + "\n"
-            try? content.write(to: fileURL, atomically: true, encoding: .utf8)
-        }
-    }
-
     func loadAll() -> [SessionRecord] {
         queue.sync { loadAllUnsynchronized() }
     }

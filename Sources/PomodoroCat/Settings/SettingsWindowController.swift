@@ -4,7 +4,7 @@ import SwiftUI
 final class SettingsWindowController: NSWindowController {
     init(settings: SettingsStore, timerEngine: TimerEngine) {
         let width = SettingsView.windowWidth
-        let height: CGFloat = 560
+        let height: CGFloat = 470
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
             styleMask: [.titled, .closable, .resizable],

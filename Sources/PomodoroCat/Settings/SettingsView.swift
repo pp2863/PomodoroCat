@@ -1,19 +1,20 @@
+import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Plain VStack layout (not Form) with an explicit fixed label width: macOS's
-/// Form auto-sizes its label column to the longest label in the section, and
-/// "Sessions until long break" was wide enough to push the segmented picker
-/// and webhook field past the window's edge on both sides.
+/// Form auto-sizes its label column to the longest label in the section, which
+/// pushed the segmented picker and webhook field past the window's edge on
+/// both sides.
 struct SettingsView: View {
     @ObservedObject var settings: SettingsStore
     let timerEngine: TimerEngine
 
     @State private var selectedPreset: Preset = .classic
-    @State private var testStatus: String = ""
-    @State private var isTestingWebhook = false
 
     enum Preset: String, CaseIterable, Identifiable {
         case classic = "Classic"
+        case medium = "Medium"
         case long = "Long"
         case custom = "Custom"
         var id: String { rawValue }
@@ -37,23 +38,18 @@ struct SettingsView: View {
                 .onChange(of: selectedPreset) { newValue in applyPreset(newValue) }
 
                 durationRow(label: "Focus (min)", value: $settings.config.focusMinutes, range: 1...180)
-                durationRow(label: "Short break (min)", value: $settings.config.shortBreakMinutes, range: 1...60)
-                durationRow(label: "Long break (min)", value: $settings.config.longBreakMinutes, range: 1...120)
-                durationRow(label: "Sessions/long break", value: $settings.config.sessionsUntilLongBreak, range: 1...12)
+                durationRow(label: "Break (min)", value: $settings.config.shortBreakMinutes, range: 1...60)
 
                 Divider()
 
-                sectionHeader("Discord")
-                TextField("Webhook URL", text: $settings.webhookURLString)
+                sectionHeader("Obsidian")
+                TextField("Path to log note", text: $settings.obsidianLogPath)
                     .textFieldStyle(.roundedBorder)
                 HStack {
-                    Button(isTestingWebhook ? "Testing…" : "Test Webhook") {
-                        testWebhook()
-                    }
-                    .disabled(settings.webhookURLString.isEmpty || isTestingWebhook)
-                    Text(testStatus)
+                    Button("Choose…") { chooseLogFile() }
+                    Text(logFileStatus)
                         .font(.caption)
-                        .foregroundColor(testStatus.hasPrefix("✅") ? .green : .red)
+                        .foregroundColor(logFileExists ? .secondary : .orange)
                     Spacer()
                 }
 
@@ -68,9 +64,21 @@ struct SettingsView: View {
             .padding(20)
         }
         .frame(width: Self.windowWidth)
+        .onAppear { selectedPreset = preset(matching: settings.config) }
         .onChange(of: settings.config) { newConfig in
             timerEngine.updateConfig(newConfig)
+            // Keep the picker honest: editing the steppers by hand flips it to
+            // Custom, rather than leaving a preset highlighted that no longer
+            // matches (which also made re-picking that preset a no-op).
+            selectedPreset = preset(matching: newConfig)
         }
+    }
+
+    private func preset(matching config: SessionConfig) -> Preset {
+        if config == .classic { return .classic }
+        if config == .medium { return .medium }
+        if config == .long { return .long }
+        return .custom
     }
 
     private func sectionHeader(_ text: String) -> some View {
@@ -93,23 +101,30 @@ struct SettingsView: View {
     private func applyPreset(_ preset: Preset) {
         switch preset {
         case .classic: settings.config = .classic
+        case .medium: settings.config = .medium
         case .long: settings.config = .long
         case .custom: break
         }
     }
 
-    private func testWebhook() {
-        guard let url = URL(string: settings.webhookURLString) else {
-            testStatus = "❌ Invalid URL"
-            return
-        }
-        isTestingWebhook = true
-        testStatus = ""
-        DiscordLogger.shared.sendTestMessage(to: url) { success in
-            DispatchQueue.main.async {
-                isTestingWebhook = false
-                testStatus = success ? "✅ Sent!" : "❌ Failed"
-            }
+    private var logFileExists: Bool {
+        let path = (settings.obsidianLogPath as NSString).expandingTildeInPath
+        return !path.isEmpty && FileManager.default.fileExists(atPath: path)
+    }
+
+    private var logFileStatus: String {
+        if settings.obsidianLogPath.isEmpty { return "No log note set — sessions won't be logged" }
+        return logFileExists ? "Note found" : "Note doesn't exist yet — it'll be created"
+    }
+
+    private func chooseLogFile() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.init(filenameExtension: "md") ?? .plainText]
+        panel.message = "Choose the note in your vault to log sessions to"
+        if panel.runModal() == .OK, let url = panel.url {
+            settings.obsidianLogPath = url.path
         }
     }
 }
