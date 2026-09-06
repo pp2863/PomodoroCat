@@ -49,7 +49,7 @@ struct SettingsView: View {
                     Button("Choose…") { chooseLogFile() }
                     Text(logFileStatus)
                         .font(.caption)
-                        .foregroundColor(logFileExists ? .secondary : .orange)
+                        .foregroundColor(logFolderExists ? .secondary : .orange)
                     Spacer()
                 }
 
@@ -112,9 +112,22 @@ struct SettingsView: View {
         return !path.isEmpty && FileManager.default.fileExists(atPath: path)
     }
 
+    private var logFolderExists: Bool {
+        let path = (settings.obsidianLogPath as NSString).expandingTildeInPath
+        guard !path.isEmpty else { return false }
+        let parent = (path as NSString).deletingLastPathComponent
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: parent, isDirectory: &isDirectory) && isDirectory.boolValue
+    }
+
+    /// A path left over from a renamed or moved vault is the failure worth
+    /// catching here, since nothing else would tell the user their sessions
+    /// have stopped being logged.
     private var logFileStatus: String {
         if settings.obsidianLogPath.isEmpty { return "No log note set — sessions won't be logged" }
-        return logFileExists ? "Note found" : "Note doesn't exist yet — it'll be created"
+        if logFileExists { return "Note found" }
+        if logFolderExists { return "Note doesn't exist yet — it'll be created" }
+        return "Folder not found — sessions won't be logged"
     }
 
     private func chooseLogFile() {

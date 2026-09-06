@@ -40,11 +40,18 @@ final class ObsidianLogger {
         let existing = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
         let updated = insert(row(for: record), forDay: Self.headingFormatter.string(from: record.startedAt), into: existing)
 
+        // Deliberately don't create missing folders: if the vault has been
+        // renamed or moved, creating the old path would silently resurrect it
+        // and quietly log into a folder Obsidian no longer opens. Better to
+        // fail and have the session recorded as unlogged.
+        var isDirectory: ObjCBool = false
+        let parent = url.deletingLastPathComponent().path
+        guard FileManager.default.fileExists(atPath: parent, isDirectory: &isDirectory), isDirectory.boolValue else {
+            print("Obsidian log folder not found: \(parent)")
+            return false
+        }
+
         do {
-            try FileManager.default.createDirectory(
-                at: url.deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
             try updated.write(to: url, atomically: true, encoding: .utf8)
             return true
         } catch {
